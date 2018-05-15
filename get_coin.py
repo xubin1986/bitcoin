@@ -76,7 +76,11 @@ def getData():
     return data,basecurrency  
     
 def getCoin(bit):
-    return bit[2].split('.')[1]
+    if isinstance(bit,list):
+        return bit[2].split('.')[1]
+    else:
+        return bit.split('.')[1]
+
     
 def genWay(bc):
     #import pdb;pdb.set_trace()
@@ -85,6 +89,8 @@ def genWay(bc):
         if getCoin(datapair[bc][qc]) == 'usd' or getCoin(datapair[bc][qc]) not in basecurrency:
             way.append(datapair[bc][qc])
         else:
+            if getCoin(datapair[bc][qc]) in pricekey:
+                way.append(datapair[bc][qc])
             for qc1 in datapair[qc].keys():
                 tmp1 = copy.deepcopy(datapair[bc][qc])
                 tmp1.append(datapair[qc][qc1][2])
@@ -92,6 +98,8 @@ def genWay(bc):
                 if getCoin(datapair[qc][qc1]) == 'usd' or getCoin(datapair[qc][qc1]) not in basecurrency:
                     way.append(tmp1)
                 else:
+                    if getCoin(datapair[qc][qc1]) in pricekey:
+                        way.append(tmp1)
                     for qc2 in datapair[qc1].keys():
                         tmp2 = copy.deepcopy(tmp1)
                         tmp2.append(datapair[qc1][qc2][2])
@@ -99,6 +107,8 @@ def genWay(bc):
                         if getCoin(datapair[qc1][qc2]) == 'usd' or getCoin(datapair[qc1][qc2]) not in basecurrency:
                             way.append(tmp2)
                         else:
+                            if getCoin(datapair[qc1][qc2]) in pricekey:
+                                way.append(tmp2)
                             for qc3 in datapair[qc2].keys():
                                 tmp3 = copy.deepcopy(tmp2)
                                 tmp3.append(datapair[qc2][qc3][2])
@@ -106,12 +116,23 @@ def genWay(bc):
                                 if getCoin(datapair[qc2][qc3]) == 'usd' or getCoin(datapair[qc2][qc3]) not in basecurrency:
                                     way.append(tmp3)
                                 else:
+                                    if getCoin(datapair[qc2][qc3]) in pricekey:
+                                        way.append(tmp3)
                                     for qc4 in datapair[qc3].keys():
                                         tmp4 = copy.deepcopy(tmp3)
-                                        tmp4.append(datapair[qc2][qc3][2])
+                                        tmp4.append(datapair[qc3][qc4][2])
                                         tmp4[0] = round(tmp4[0] * datapair[qc3][qc4][0],float)
                                         if getCoin(datapair[qc3][qc4]) == 'usd' or getCoin(datapair[qc3][qc4]) not in basecurrency:
                                             way.append(tmp4)
+    for i in range(len(way)):
+        firstbit = getCoin(way[i][1])
+        lastbit = getCoin(way[i][-1]) 
+        if firstbit in pricekey and lastbit in pricekey:
+            way[i][0] = round(way[i][0]*dataprice[lastbit],float)
+            way[i].append(dataprice[firstbit])
+            profit = round((way[i][0]-way[i][-1])/way[i][-1],float)
+            way[i].append(profit)
+    return way
     values = ''
     for i in way:    
         values += ",('%s','%s','%s')" % (bc,i[0],str(i))
@@ -123,6 +144,23 @@ def genWay(bc):
     
     #dataway[bc] = way
     #print dataway.keys()
+    
+
+def getDataPrice():
+    price = {}
+    sql = "select * from coindata_price where createtime=(select max(createtime) from coindata_price);"
+    ret = mysql(sql)
+    pricekey = [i[1] for i in ret]
+    pricevalue = [i[2] for i in ret]
+    for i in range(len(pricekey)):
+        price[pricekey[i]] = pricevalue[i]
+    price['USD'] = 6.3492
+    price['EUR'] = 7.57119
+    price['JPY'] = 0.057744
+    pricekey.append('USD')
+    pricekey.append('EUR')
+    pricekey.append('JPY')
+    return pricekey,price
 
 def getHighPair():
     #import pdb;pdb.set_trace()
@@ -134,18 +172,23 @@ def getHighPair():
                 try:
                     type(datapair[bc][qc])
                 except:
-                    datapair[bc][qc] = []
+                    datapair[bc][qc] = []    
                 datapair[bc][qc].append([round(data[bc][ex][qc][6]*(1-rate[ex]),float),'%s.%s' % (ex,bc),'%s.%s' % (ex,qc)])
+    #print datapair['OMG']['USDT'];sys.exit(1)
         for qc in datapair[bc].keys():
             tmp = [i[0] for i in datapair[bc][qc]]
             datapair[bc][qc] = datapair[bc][qc][tmp.index(max(tmp))]
     return datapair
 def main():
-    global data,basecurrency,datapair,dataway
-    dataway = {}
+    global data,basecurrency,datapair,dataprice,pricekey
+    pricekey,dataprice = getDataPrice()
     data,basecurrency = getData()
     #print basecurrency;sys.exit(1)
     datapair = getHighPair()
+    for i in genWay('OMG'):
+        #if getCoin(i[-1]) in ['USD','USDT']:
+        print i
+    sys.exit(1)
     
     for bc in ['2GIVE', 'ABY', 'ADA']:
         p = Process(target=genWay,args=(bc,))
