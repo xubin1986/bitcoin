@@ -132,7 +132,7 @@ def genWay(bc):
             way[i].append(dataprice[firstbit])
             profit = round((way[i][0]-way[i][-1])/way[i][-1],float)
             way[i].append(profit)
-    return way
+    return sorted(way,key=lambda tmp: tmp[0],reverse=True)
     values = ''
     for i in way:    
         values += ",('%s','%s','%s')" % (bc,i[0],str(i))
