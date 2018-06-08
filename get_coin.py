@@ -132,10 +132,11 @@ def genWay(bc):
             way[i].append(dataprice[firstbit])
             profit = round((way[i][0]-way[i][-1])/way[i][-1],float)
             way[i].append(profit)
-    return sorted(way,key=lambda tmp: tmp[0],reverse=True)
+    return sorted(way,key=lambda tmp: tmp[0],reverse=True)[0:19]
+    
     values = ''
-    for i in way:    
-        values += ",('%s','%s','%s')" % (bc,i[0],str(i))
+    for i in sorted(way,key=lambda tmp: tmp[0],reverse=True)[0:19]:
+        values += ",('%s','%s','%s')" % (bc,i[0],','.join(i[1:-2]))
     values = re.sub(r'^,','',values)
     sql = "insert into result values %s;" % values
     if bc == '2GIVE':
@@ -179,31 +180,36 @@ def getHighPair():
             tmp = [i[0] for i in datapair[bc][qc]]
             datapair[bc][qc] = datapair[bc][qc][tmp.index(max(tmp))]
     return datapair
+def cutList(list,n,new=[]):
+    if len(list) <= n:
+        new.append(list)
+        return new
+    else:
+        new.append(list[:n])
+        return cutList(list[n:],n)
+     
 def main():
     global data,basecurrency,datapair,dataprice,pricekey
     pricekey,dataprice = getDataPrice()
     data,basecurrency = getData()
-    #print basecurrency;sys.exit(1)
     datapair = getHighPair()
-    for i in genWay('OMG'):
-        #if getCoin(i[-1]) in ['USD','USDT']:
-        print i
+    # for i in genWay('OMG'):
+        # print i
+    # sys.exit(1)
+    # print len(basecurrency)
+    for bc in basecurrency:
+        genWay(bc)
     sys.exit(1)
-    
-    for bc in ['2GIVE', 'ABY', 'ADA']:
-        p = Process(target=genWay,args=(bc,))
-        p.start()
-        #dataway[bc] = genWay(bc)
-        #genWay(bc)
-    print dataway.keys()
-    for i in dataway['2GIVE']:
-        print i
-    #print datapair['eth']
+    for sublist in cutList(basecurrency,pmax):
+        for bc in sublist:
+            p = Process(target=genWay,args=(bc,))
+            p.start()
+        print 'multi process'
             
 if __name__ == '__main__':
     basecount = 1
     float = 13
     jump = 4
-    pmax=10
+    pmax=
     rate = {"bitfinex":0.02,"hitbtc":0.02,"bittrex":0.01,"okex":0.02,"gateio":0.02,"cryptopia":0.02,"poloniex":0.02}
     main()
