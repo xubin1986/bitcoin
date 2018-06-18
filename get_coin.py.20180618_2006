@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*-
 import MySQLdb,re,xlwt,sys,time,copy
 from multiprocessing import Process
 
@@ -73,84 +72,71 @@ def getHighPair():
             datapair[bc][qc] = datapair[bc][qc][tmp.index(max(tmp))]
     return datapair
     
-        
-def countPrice(tmpway,bc,qc):
-    if tmpway[-2][0] == tmpway[-1][0]:
-        price = round(tmpway[0] * datapair[bc][qc][0],float)
+def getCoin(bit):
+    if isinstance(bit,list):
+        return bit[2].split('.')[1]
     else:
-        price = round(tmpway[0] * datapair[bc][qc][0] * (1-rate[tmpway[-2][0]]),float)
+        return bit.split('.')[1]
+        
+def countPrice(way,bc,qc):
+    if way[-2][0] == way[-1][0]:
+        price = round(way[0] * datapair[bc][qc][0],float)
+    else:
+        price = round(way[0] * datapair[bc][qc][0] * (1-rate[way[-2][0]]),float)
     return price
     
-def isbitpriced(bit):
-    if bit in pricekey or (bit in basecurrency and 'USDT' in datapair[bit].keys()):
-        return True
-    else:
-        return False
-        
-        
 def genWay(bc): 
     #import pdb;pdb.set_trace()
     way = []
     for qc in datapair[bc].keys():
-        #if isbitpriced(datapair[bc][qc][-1][1]):
-        way.append(datapair[bc][qc])
-        if qc in basecurrency:
+        if datapair[bc][qc][2][1] not in basecurrency:
+            way.append(datapair[bc][qc])
+        else:
+            #if getCoin(datapair[bc][qc]) in pricekey:
+            way.append(datapair[bc][qc])
             for qc1 in datapair[qc].keys():
                 tmp1 = copy.deepcopy(datapair[bc][qc])
                 tmp1.append(datapair[qc][qc1][2])
                 tmp1[0] = countPrice(tmp1,qc,qc1)
-                #if isbitpriced(tmp1[-1][1]):
-                way.append(tmp1)
-                if qc1 in basecurrency:
+                if datapair[qc][qc1][2][1] not in basecurrency:
+                    way.append(tmp1)
+                else:
+                    #if getCoin(datapair[qc][qc1]) in pricekey:
+                    way.append(tmp1)
                     for qc2 in datapair[qc1].keys():
                         tmp2 = copy.deepcopy(tmp1)
                         tmp2.append(datapair[qc1][qc2][2])
                         tmp2[0] = countPrice(tmp2,qc1,qc2)
-                        #if isbitpriced(tmp2[-1][1]):
-                        way.append(tmp2)
-                        if qc2 in basecurrency:
+                        if datapair[qc1][qc2][2][1] not in basecurrency:
+                            way.append(tmp2)
+                        else:
+                            #if getCoin(datapair[qc1][qc2]) in pricekey:
+                            way.append(tmp2)
                             for qc3 in datapair[qc2].keys():
                                 tmp3 = copy.deepcopy(tmp2)
                                 tmp3.append(datapair[qc2][qc3][2])
                                 tmp3[0] = countPrice(tmp3,qc2,qc3)
-                                #if isbitpriced(tmp3[-1][1]):
-                                way.append(tmp3)
-                                if qc3 in basecurrency:
+                                if datapair[qc2][qc3][2][1] not in basecurrency:
+                                    way.append(tmp3)
+                                else:
+                                    #if getCoin(datapair[qc2][qc3]) in pricekey:
+                                    way.append(tmp3)
                                     for qc4 in datapair[qc3].keys():
                                         tmp4 = copy.deepcopy(tmp3)
                                         tmp4.append(datapair[qc3][qc4][2])
                                         tmp4[0] = countPrice(tmp4,qc3,qc4)
-                                        #if isbitpriced(tmp4[-1][1]):
                                         way.append(tmp4)
     #return way
     #import pdb;pdb.set_trace()
-    route = []
-    if not isbitpriced(bc):
-        for i in way:
-            route.append(i+[0,0])
-        return route
     for i in range(len(way)):
-        endbit = way[i][-1][1]
-        if not isbitpriced(endbit):
-            route.append(way[i]+[0,0])
-            continue
-        if bc in pricekey:
-            origprice = dataprice[bc]
-        else:
-            origprice = round(datapair[bc]['USDT'][0] * dataprice['USDT'],float)
-
-        if endbit not in pricekey:
-            way.append(datapair[endbit]['USDT'][2])
-            #因为是评估价格，所以此处不计算手续费
-            way[i][0] = round(way[i][0]*datapair[endbit]['USDT'][0],float)
-            endbit = 'USDT'
-        routeprice = round(way[i][0]*dataprice[endbit],float)
-        profit = round((routeprice-origprice)/origprice*100,2)
-        way[i][0] = routeprice
-        if profit > 0:
-            route.append(way[i]+[origprice,profit])
-    #return sorted(way,key=lambda tmp: tmp[0],reverse=True)[0:19]
-    return sorted(route,key=lambda tmp: tmp[-1],reverse=True)
+        firstbit = way[i][1][1]
+        lastbit = way[i][-1][1]
+        if firstbit in pricekey and lastbit in pricekey:
+            way[i][0] = round(way[i][0]*dataprice[lastbit],float)
+            way[i].append(dataprice[firstbit])
+            profit = round((way[i][0]-way[i][-1])/way[i][-1],float)
+            way[i].append(profit)
+    return sorted(way,key=lambda tmp: tmp[0],reverse=True)[0:19]
     
     values = ''
     for i in sorted(way,key=lambda tmp: tmp[0],reverse=True)[0:19]:
@@ -188,6 +174,7 @@ def main():
         print i
     sys.exit(1)
     
+    print len(basecurrency)
     for bc in basecurrency:
         p = Process(target=genWay,args=(bc,))
         p.start()
