@@ -46,15 +46,18 @@ def mysql(sql):
 
 
 def getHighPair():
+    #格式化所有交易对为[[price,source,target]]
     #import pdb;pdb.set_trace()
-    sql = 'select * from test;'
+    sql = 'select * from coindata_tickers where codeid=1;,,,select distinct quotcurrency from coindata_tickers where codeid=1;'
     ret = mysql(sql)
     datapair = {}
-    for row in ret:
-        bc = row[12]
+    cnyqc = [i[0] for i in ret[1]]
+    for row in ret[0]:
+        #记录正方向的价格
+        bc = row[9]
         ex = row[11]
-        qc = row[13]
-        last = row[6]
+        qc = row[10]
+        last = row[3]
         try:
             type(datapair[bc])
         except:
@@ -67,63 +70,128 @@ def getHighPair():
         source = [ex,bc]
         target = [ex,qc]
         datapair[bc][qc].append([price,source,target])
+        #记录反方向的价格
+        if row[6] != 0:
+            bc = row[10]
+            ex = row[11]
+            qc = row[9]
+            last = round(1/last,float)
+            try:
+                type(datapair[bc])
+            except:
+                datapair[bc] = {}
+            try:
+                type(datapair[bc][qc])
+            except:
+                datapair[bc][qc] = []
+            price = round(last*(1-rate[ex]),float)
+            source = [ex,bc]
+            target = [ex,qc]
+            datapair[bc][qc].append([price,source,target])
+    #获取所有交易对中最高价格的交易对，并保留
     for bc in datapair.keys():
         for qc in datapair[bc].keys():
             tmp = [i[0] for i in datapair[bc][qc]]
             datapair[bc][qc] = datapair[bc][qc][tmp.index(max(tmp))]
-    return datapair
+    return datapair,cnyqc
     
         
 def countPrice(tmpway,bc,qc):
     if tmpway[-2][0] == tmpway[-1][0]:
+        #交易所相同的时候计算换币的手续费
         price = round(tmpway[0] * datapair[bc][qc][0],float)
     else:
+        #两跳之间交易所不同的时候，需要计算换交易所的手续费
         price = round(tmpway[0] * datapair[bc][qc][0] * (1-rate[tmpway[-2][0]]),float)
     return price
     
 def isbitpriced(bit):
-    if bit in pricekey or (bit in basecurrency and 'USDT' in datapair[bit].keys()):
+    #判断虚拟币是否可以换算为人民币价格
+    if bit in pricekey or [ i for i in datapair[bit].keys() if i in cnyqc ]:
         return True
     else:
         return False
+        
+def getprofit(origprice,count,endbit):
+    if endbit not in pricekey:
+        try:
+            transbit = [ i for i in datapair[endbit].keys() if i in pricekey ][0]
+        except:
+            return [endbit,origprice,0,0]
+        #因为是评估价格，所以此处不计算手续费
+        count = round(count*datapair[endbit][transbit][0],float)
+        endbit = transbit
+    routeprice = round(count*dataprice[endbit],float)
+    profit = round((routeprice-origprice)/origprice*100,2)
+    return [endbit,origprice,routeprice,profit]
+        
         
         
 def genWay(bc): 
     #import pdb;pdb.set_trace()
     way = []
+    route = []
+    origprice = dataprice[bc]
     for qc in datapair[bc].keys():
-        #if isbitpriced(datapair[bc][qc][-1][1]):
-        way.append(datapair[bc][qc])
-        if qc in basecurrency:
-            for qc1 in datapair[qc].keys():
-                tmp1 = copy.deepcopy(datapair[bc][qc])
-                tmp1.append(datapair[qc][qc1][2])
-                tmp1[0] = countPrice(tmp1,qc,qc1)
-                #if isbitpriced(tmp1[-1][1]):
-                way.append(tmp1)
-                if qc1 in basecurrency:
-                    for qc2 in datapair[qc1].keys():
-                        tmp2 = copy.deepcopy(tmp1)
-                        tmp2.append(datapair[qc1][qc2][2])
-                        tmp2[0] = countPrice(tmp2,qc1,qc2)
-                        #if isbitpriced(tmp2[-1][1]):
-                        way.append(tmp2)
-                        if qc2 in basecurrency:
-                            for qc3 in datapair[qc2].keys():
-                                tmp3 = copy.deepcopy(tmp2)
-                                tmp3.append(datapair[qc2][qc3][2])
-                                tmp3[0] = countPrice(tmp3,qc2,qc3)
-                                #if isbitpriced(tmp3[-1][1]):
-                                way.append(tmp3)
-                                if qc3 in basecurrency:
-                                    for qc4 in datapair[qc3].keys():
-                                        tmp4 = copy.deepcopy(tmp3)
-                                        tmp4.append(datapair[qc3][qc4][2])
-                                        tmp4[0] = countPrice(tmp4,qc3,qc4)
-                                        #if isbitpriced(tmp4[-1][1]):
-                                        way.append(tmp4)
+        profitlist = getprofit(origprice,datapair[bc][qc][0],datapair[bc][qc][-1][1])
+        if profitlist[3] > 0:
+            way.append(datapair[bc][qc]+profitlist)
+        for qc1 in datapair[qc].keys():
+            tmp1 = copy.deepcopy(datapair[bc][qc])
+            if datapair[qc][qc1][2] in tmp1:
+                continue
+            tmp1.append(datapair[qc][qc1][2])
+            tmp1[0] = countPrice(tmp1,qc,qc1)
+            profitlist = getprofit(origprice,tmp1[0],tmp1[-1][1])
+            if profitlist[3] > 0:
+                way.append(tmp1+profitlist)
+            else:
+                continue
+            for qc2 in datapair[qc1].keys():
+                tmp2 = copy.deepcopy(tmp1)
+                if datapair[qc1][qc2][2] in tmp2:
+                    continue
+                tmp2.append(datapair[qc1][qc2][2])
+                tmp2[0] = countPrice(tmp2,qc1,qc2)
+                profitlist = getprofit(origprice,tmp2[0],tmp2[-1][1])
+                if profitlist[3] > 0:
+                    way.append(tmp2+profitlist)
+                else:
+                    continue
+                for qc3 in datapair[qc2].keys():
+                    tmp3 = copy.deepcopy(tmp2)
+                    if datapair[qc2][qc3][2] in tmp3:
+                        continue
+                    tmp3.append(datapair[qc2][qc3][2])
+                    tmp3[0] = countPrice(tmp3,qc2,qc3)
+                    profitlist = getprofit(origprice,tmp3[0],tmp3[-1][1])
+                    if profitlist[3] > 0:
+                        way.append(tmp3+profitlist)
+                    
+                    
+                    
+                    
+                    
+                    
+                    # if qc3 in basecurrency:
+                        # for qc4 in datapair[qc3].keys():
+                            # tmp4 = copy.deepcopy(tmp3)
+                            # tmp4.append(datapair[qc3][qc4][2])
+                            # tmp4[0] = countPrice(tmp4,qc3,qc4)
+                            #if isbitpriced(tmp4[-1][1]):
+                            # way.append(tmp4)
+                            # if qc4 in basecurrency:
+                                # for qc5 in datapair[qc4].keys():
+                                    # tmp5 = copy.deepcopy(tmp4)
+                                    # tmp5.append(datapair[qc4][qc5][2])
+                                    # tmp5[0] = countPrice(tmp5,qc4,qc5)
+                                    # way.append(tmp5)
     #return way
     #import pdb;pdb.set_trace()
+    # for i in way:
+        # print i[-1][1]
+    return sorted(way,key=lambda tmp: tmp[-1],reverse=True)
+    return way
     route = []
     if not isbitpriced(bc):
         for i in way:
@@ -150,7 +218,7 @@ def genWay(bc):
         if profit > 0:
             route.append(way[i]+[origprice,profit])
     #return sorted(way,key=lambda tmp: tmp[0],reverse=True)[0:19]
-    return sorted(route,key=lambda tmp: tmp[-1],reverse=True)
+    return sorted(route,key=lambda tmp: tmp[0],reverse=True)
     
     values = ''
     for i in sorted(way,key=lambda tmp: tmp[0],reverse=True)[0:19]:
@@ -174,16 +242,19 @@ def getDataPrice():
     price['USD'] = 6.3492
     price['EUR'] = 7.57119
     price['JPY'] = 0.057744
+    price['GBP'] = 8.5207
     pricekey.append('USD')
     pricekey.append('EUR')
     pricekey.append('JPY')
+    pricekey.append('GBP')
     return pricekey,price
     
 def main():
-    global basecurrency,pricekey,dataprice,datapair
+    global basecurrency,pricekey,dataprice,datapair,cnyqc
     pricekey,dataprice = getDataPrice()
-    datapair = getHighPair()
+    datapair,cnyqc = getHighPair()
     basecurrency = datapair.keys()
+    #import pdb;pdb.set_trace()
     for i in genWay('OMG'):
         print i
     sys.exit(1)
@@ -194,8 +265,8 @@ def main():
 
 if __name__ == '__main__':
     basecount = 1
-    float = 13
+    float = 16
     jump = 4
     pmax= 40
-    rate = {"bitfinex":0.02,"hitbtc":0.02,"bittrex":0.01,"okex":0.02,"gateio":0.02,"cryptopia":0.02,"poloniex":0.02}
+    rate = {"bitfinex":0.02,"hitbtc":0.02,"bittrex":0.01,"okex":0.02,"gateio":0.02,"binance":0.02,"poloniex":0.02,"ethfinex":0.02}
     main()
