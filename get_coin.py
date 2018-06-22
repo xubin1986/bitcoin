@@ -126,14 +126,25 @@ def getprofit(origprice,count,endbit):
     routeprice = round(count*dataprice[endbit],float)
     profit = round((routeprice-origprice)/origprice*100,2)
     return [endbit,origprice,routeprice,profit]
-        
+
+def getorigprice(bit):
+    if bit not in pricekey:
+        try:
+            transbit = [ i for i in datapair[bit].keys() if i in pricekey ][0]
+            return round(datapair[bit][transbit][0]*dataprice[transbit],float)
+        except:
+            return 0
+    else:
+        return dataprice[bit]
         
         
 def genWay(bc): 
     #import pdb;pdb.set_trace()
     way = []
     route = []
-    origprice = dataprice[bc]
+    origprice = getorigprice(bc)
+    if origprice == 0:
+        return 1
     for qc in datapair[bc].keys():
         profitlist = getprofit(origprice,datapair[bc][qc][0],datapair[bc][qc][-1][1])
         if profitlist[3] > minprofit:
@@ -238,13 +249,13 @@ def main():
     #import pdb;pdb.set_trace()
     # for i in genWay('OMG'):
         # print i
-    genWay('OMG')
-    sys.exit(1)
-    
-    for bc in basecurrency:
-        p = Process(target=genWay,args=(bc,))
-        p.start()
-
+    # genWay('OMG')
+    # sys.exit(1)
+    for bc in basecurrency[:4]:
+        genWay(bc)
+        # p = Process(target=genWay,args=(bc,))
+        # p.start()
+    print 'Finish'
 if __name__ == '__main__':
     basecount = 1
     float = 16
@@ -253,3 +264,4 @@ if __name__ == '__main__':
     pmax= 40
     rate = {"bitfinex":0.02,"hitbtc":0.02,"bittrex":0.01,"okex":0.02,"gateio":0.02,"binance":0.02,"poloniex":0.02,"ethfinex":0.02}
     main()
+    print 'Finish2'
