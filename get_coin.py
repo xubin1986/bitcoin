@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import MySQLdb,re,xlwt,sys,time,copy
+import MySQLdb,re,sys,time,copy,json
 from multiprocessing import Process
 
 def mysql(sql):
@@ -58,6 +58,8 @@ def getHighPair():
         ex = row[11]
         qc = row[10]
         last = row[3]
+        if not last:
+            continue
         try:
             type(datapair[bc])
         except:
@@ -134,7 +136,7 @@ def genWay(bc):
     origprice = dataprice[bc]
     for qc in datapair[bc].keys():
         profitlist = getprofit(origprice,datapair[bc][qc][0],datapair[bc][qc][-1][1])
-        if profitlist[3] > 0:
+        if profitlist[3] > minprofit:
             way.append(datapair[bc][qc]+profitlist)
         for qc1 in datapair[qc].keys():
             tmp1 = copy.deepcopy(datapair[bc][qc])
@@ -143,9 +145,9 @@ def genWay(bc):
             tmp1.append(datapair[qc][qc1][2])
             tmp1[0] = countPrice(tmp1,qc,qc1)
             profitlist = getprofit(origprice,tmp1[0],tmp1[-1][1])
-            if profitlist[3] > 0:
+            if profitlist[3] > minprofit:
                 way.append(tmp1+profitlist)
-            else:
+            elif profitlist[3] <= 0:
                 continue
             for qc2 in datapair[qc1].keys():
                 tmp2 = copy.deepcopy(tmp1)
@@ -154,9 +156,9 @@ def genWay(bc):
                 tmp2.append(datapair[qc1][qc2][2])
                 tmp2[0] = countPrice(tmp2,qc1,qc2)
                 profitlist = getprofit(origprice,tmp2[0],tmp2[-1][1])
-                if profitlist[3] > 0:
+                if profitlist[3] > minprofit:
                     way.append(tmp2+profitlist)
-                else:
+                elif profitlist[3] <= 0:
                     continue
                 for qc3 in datapair[qc2].keys():
                     tmp3 = copy.deepcopy(tmp2)
@@ -165,7 +167,7 @@ def genWay(bc):
                     tmp3.append(datapair[qc2][qc3][2])
                     tmp3[0] = countPrice(tmp3,qc2,qc3)
                     profitlist = getprofit(origprice,tmp3[0],tmp3[-1][1])
-                    if profitlist[3] > 0:
+                    if profitlist[3] > minprofit:
                         way.append(tmp3+profitlist)
                     
                     
@@ -186,43 +188,22 @@ def genWay(bc):
                                     # tmp5.append(datapair[qc4][qc5][2])
                                     # tmp5[0] = countPrice(tmp5,qc4,qc5)
                                     # way.append(tmp5)
-    #return way
-    #import pdb;pdb.set_trace()
-    # for i in way:
-        # print i[-1][1]
-    return sorted(way,key=lambda tmp: tmp[-1],reverse=True)
-    return way
-    route = []
-    if not isbitpriced(bc):
-        for i in way:
-            route.append(i+[0,0])
-        return route
-    for i in range(len(way)):
-        endbit = way[i][-1][1]
-        if not isbitpriced(endbit):
-            route.append(way[i]+[0,0])
-            continue
-        if bc in pricekey:
-            origprice = dataprice[bc]
-        else:
-            origprice = round(datapair[bc]['USDT'][0] * dataprice['USDT'],float)
-
-        if endbit not in pricekey:
-            way.append(datapair[endbit]['USDT'][2])
-            #因为是评估价格，所以此处不计算手续费
-            way[i][0] = round(way[i][0]*datapair[endbit]['USDT'][0],float)
-            endbit = 'USDT'
-        routeprice = round(way[i][0]*dataprice[endbit],float)
-        profit = round((routeprice-origprice)/origprice*100,2)
-        way[i][0] = routeprice
-        if profit > 0:
-            route.append(way[i]+[origprice,profit])
-    #return sorted(way,key=lambda tmp: tmp[0],reverse=True)[0:19]
-    return sorted(route,key=lambda tmp: tmp[0],reverse=True)
+                                    
+    #return sorted(way,key=lambda tmp: tmp[-1],reverse=True)
     
     values = ''
-    for i in sorted(way,key=lambda tmp: tmp[0],reverse=True)[0:19]:
-        values += ",NULL,('%s','%s','%s')" % (bc,i[0],','.join(i[1:-2]))
+    createtime = int(time.time())
+    for i in way[:11]:
+        startexchage = i[1][0]
+        startcoin = i[1][1]
+        endexchange = i[-5][0]
+        endcoin = i[-5][1]
+        startprice = i[-3]
+        endcount = i[0]
+        endprice = i[-2]
+        profit = i[-1]
+        routes = json.dumps({"route":i[1:-4]})
+        values += ",(NULL,'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')" % (startexchage,startcoin,endexchange,endcoin,startprice,endcount,endprice,profit,routes,'2',createtime)
     values = re.sub(r'^,','',values)
     sql = "insert into coindata_routes values %s;" % values
     mysql(sql)
@@ -255,8 +236,9 @@ def main():
     datapair,cnyqc = getHighPair()
     basecurrency = datapair.keys()
     #import pdb;pdb.set_trace()
-    for i in genWay('OMG'):
-        print i
+    # for i in genWay('OMG'):
+        # print i
+    genWay('OMG')
     sys.exit(1)
     
     for bc in basecurrency:
@@ -266,6 +248,7 @@ def main():
 if __name__ == '__main__':
     basecount = 1
     float = 16
+    minprofit = 5
     jump = 4
     pmax= 40
     rate = {"bitfinex":0.02,"hitbtc":0.02,"bittrex":0.01,"okex":0.02,"gateio":0.02,"binance":0.02,"poloniex":0.02,"ethfinex":0.02}
