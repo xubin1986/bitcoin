@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import MySQLdb,re,sys,time,copy,json
+import multiprocessing
 from multiprocessing import Process
 
 def mysql(sql):
@@ -140,6 +141,9 @@ def getorigprice(bit):
         
 def genWay(bc): 
     #import pdb;pdb.set_trace()
+    if bc not in datapair.keys():
+        print 'can not statistic for %s' % bc
+        return 1
     way = []
     route = []
     origprice = getorigprice(bc)
@@ -204,7 +208,7 @@ def genWay(bc):
     
     values = ''
     createtime = int(time.time())
-    for i in way[:11]:
+    for i in sorted(way,key=lambda tmp: tmp[-1],reverse=True)[:100]:
         startexchage = i[1][0]
         startcoin = i[1][1]
         endexchange = i[-5][0]
@@ -218,6 +222,7 @@ def genWay(bc):
     values = re.sub(r'^,','',values)
     sql = "insert into coindata_routes values %s;" % values
     mysql(sql)
+    print 'finish statistic for %s' % bc
     
     #dataway[bc] = way
     #print dataway.keys()
@@ -251,17 +256,26 @@ def main():
         # print i
     # genWay('OMG')
     # sys.exit(1)
-    for bc in basecurrency[:4]:
-        genWay(bc)
+    
+    # for bc in runbc[:4]:
+        #genWay(bc)
         # p = Process(target=genWay,args=(bc,))
         # p.start()
+        # p.join()
+    pool = multiprocessing.Pool(processes=8)
+    for bc in runbc:
+        pool.apply_async(genWay, (bc, ))
+    pool.close()
+    pool.join()
     print 'Finish'
+    sql = "update coindata_routes set codeid=0 where codeid=1;,,,update coindata_routes set codeid=1 where codeid=2;"
+    mysql(sql)
 if __name__ == '__main__':
     basecount = 1
     float = 16
     minprofit = 5
     jump = 4
     pmax= 40
+    runbc = ['BTC','ETH','XRP','BCH','EOS','LTC','XLM','ADA','TRX','MIOTA','USDT','NEO','DASH','BNB','VEN','ETC','XEM','OKB','HT','OMG','QTUM','ONT','ZEC','ICX','LSK','DCR','BCN','ZIL','BTG','XET','BTM','SC','ZRX','XVG']
     rate = {"bitfinex":0.02,"hitbtc":0.02,"bittrex":0.01,"okex":0.02,"gateio":0.02,"binance":0.02,"poloniex":0.02,"ethfinex":0.02}
     main()
-    print 'Finish2'
