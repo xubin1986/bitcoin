@@ -49,11 +49,10 @@ def mysql(sql):
 def getHighPair():
     #格式化所有交易对为[[price,source,target]]
     #import pdb;pdb.set_trace()
-    sql = 'select * from coindata_tickers where codeid=1;,,,select distinct quotcurrency from coindata_tickers where codeid=1;'
+    sql = 'select * from coindata_tickers where codeid=1;'
     ret = mysql(sql)
     datapair = {}
-    cnyqc = [i[0] for i in ret[1]]
-    for row in ret[0]:
+    for row in ret:
         #记录正方向的价格
         bc = row[9]
         ex = row[11]
@@ -96,7 +95,7 @@ def getHighPair():
         for qc in datapair[bc].keys():
             tmp = [i[0] for i in datapair[bc][qc]]
             datapair[bc][qc] = datapair[bc][qc][tmp.index(max(tmp))]
-    return datapair,cnyqc
+    return datapair
 
 def countPrice(tmpway,bc,qc):
     if tmpway[-2][0] == tmpway[-1][0]:
@@ -113,7 +112,7 @@ def getstepprice(tmp,qc):
         price = datapair[bc][qc][0]
         return round(tmp[0] * price,float)
     except:
-        return 0
+        return 1.1
         
 def genWay(bc): 
     #import pdb;pdb.set_trace()
@@ -128,7 +127,7 @@ def genWay(bc):
             tmp1.append(datapair[qc][qc1][2])
             tmp1[0] = countPrice(tmp1,qc,qc1)
             if tmp1[-1][1] == bc:
-                if tmp1[0] > 1:
+                if tmp1[0] > 1.2:
                     way.append(tmp1)
                 else:
                     continue
@@ -140,8 +139,9 @@ def genWay(bc):
                 tmp2 = copy.deepcopy(tmp1)
                 tmp2.append(datapair[qc1][qc2][2])
                 tmp2[0] = countPrice(tmp2,qc1,qc2)
+                
                 if tmp2[-1][1] == bc:
-                    if tmp2[0] > 1:
+                    if tmp2[0] > 1.2:
                         way.append(tmp2)
                     else:
                         continue
@@ -154,28 +154,11 @@ def genWay(bc):
                     tmp3.append(datapair[qc2][qc3][2])
                     tmp3[0] = countPrice(tmp3,qc2,qc3)
                     if tmp3[-1][1] == bc:
-                        if tmp3[0] > 1:
+                        if tmp3[0] > 1.2:
                             way.append(tmp3)
                     else:
                         continue
                     
-                    
-                    
-                    
-                    
-                    # if qc3 in basecurrency:
-                        # for qc4 in datapair[qc3].keys():
-                            # tmp4 = copy.deepcopy(tmp3)
-                            # tmp4.append(datapair[qc3][qc4][2])
-                            # tmp4[0] = countPrice(tmp4,qc3,qc4)
-                            #if isbitpriced(tmp4[-1][1]):
-                            # way.append(tmp4)
-                            # if qc4 in basecurrency:
-                                # for qc5 in datapair[qc4].keys():
-                                    # tmp5 = copy.deepcopy(tmp4)
-                                    # tmp5.append(datapair[qc4][qc5][2])
-                                    # tmp5[0] = countPrice(tmp5,qc4,qc5)
-                                    # way.append(tmp5)
                                     
     return sorted(way,key=lambda tmp: tmp[0],reverse=True)
     
@@ -200,41 +183,18 @@ def genWay(bc):
     #dataway[bc] = way
     #print dataway.keys()
     
-
-def getDataPrice():
-    price = {}
-    sql = "select * from coindata_price where createtime=(select max(createtime) from coindata_price);"
-    ret = mysql(sql)
-    pricekey = [i[0] for i in ret]
-    pricevalue = [i[2] for i in ret]
-    for i in range(len(pricekey)):
-        price[pricekey[i]] = pricevalue[i]
-    price['USD'] = 6.3492
-    price['EUR'] = 7.57119
-    price['JPY'] = 0.057744
-    price['GBP'] = 8.5207
-    pricekey.append('USD')
-    pricekey.append('EUR')
-    pricekey.append('JPY')
-    pricekey.append('GBP')
-    return pricekey,price
+  
     
 def main():
-    global basecurrency,pricekey,dataprice,datapair,cnyqc
-    pricekey,dataprice = getDataPrice()
-    datapair,cnyqc = getHighPair()
+    global datapair
+    datapair = getHighPair()
     #basecurrency = datapair.keys()
     #import pdb;pdb.set_trace()
-    for i in genWay('BTC'):
+    for i in genWay('OMG'):
         print i
     sys.exit(1)
     
-    # for bc in runbc[:4]:
-        #genWay(bc)
-        # p = Process(target=genWay,args=(bc,))
-        # p.start()
-        # p.join()
-    pool = multiprocessing.Pool(processes=8)
+    pool = multiprocessing.Pool(processes=maxprocess)
     for bc in runbc:
         pool.apply_async(genWay, (bc, ))
     pool.close()
@@ -244,6 +204,7 @@ def main():
     mysql(sql)
 if __name__ == '__main__':
     float = 16
+    maxprocess = 4
     runbc = ['BTC','ETH','XRP','BCH','EOS','LTC','XLM','ADA','TRX','MIOTA','USDT','NEO','DASH','BNB','VEN','ETC','XEM','OKB','HT','OMG','QTUM','ONT','ZEC','ICX','LSK','DCR','BCN','ZIL','BTG','XET','BTM','SC','ZRX','XVG']
     rate = {"bitfinex":0.02,"hitbtc":0.02,"bittrex":0.01,"okex":0.02,"gateio":0.02,"binance":0.02,"poloniex":0.02,"ethfinex":0.02}
     main()
