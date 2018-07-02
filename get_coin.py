@@ -40,7 +40,6 @@ def mysql(sql):
             return output
     except Exception as e:
         print str(e)
-        sqlconnect.close()
         sys.exit(1)
     finally:
         sqlconnect.close()
@@ -113,7 +112,18 @@ def getstepprice(tmp,qc):
         return round(tmp[0] * price,float)
     except:
         return 1.1
-        
+
+def formatStep(orglist):
+    #import pdb;pdb.set_trace()
+    list0 = []
+    list0.append(orglist[0])
+    lenth = len(orglist)
+    for i in range(1,lenth-1):
+        list0.append(orglist[i])
+        if orglist[i][0] != orglist[i+1][0]:
+            list0.append([orglist[i+1][0],orglist[i][1]])
+    list0.append(orglist[-1])
+    return list0
 def genWay(bc): 
     #import pdb;pdb.set_trace()
     if bc not in datapair.keys():
@@ -160,21 +170,25 @@ def genWay(bc):
                         continue
                     
                                     
-    return sorted(way,key=lambda tmp: tmp[0],reverse=True)
+    #return sorted(way,key=lambda tmp: tmp[0],reverse=True)
     
     values = ''
-    createtime = int(time.time())
-    for i in sorted(way,key=lambda tmp: tmp[-1],reverse=True)[:100]:
+    for i in sorted(way,key=lambda tmp: tmp[0],reverse=True)[:50]:
+        exchanges = len(list(set([j[0] for j in i[1:]])))
+        if exchanges > 4:
+            continue
+        i = formatStep(i)
+        coin = i[1][1]
         startexchage = i[1][0]
-        startcoin = i[1][1]
-        endexchange = i[-5][0]
-        endcoin = i[-5][1]
-        startprice = i[-3]
+        endexchange = i[-1][0]
         endcount = i[0]
-        endprice = i[-2]
-        profit = i[-1]
-        routes = json.dumps({"route":i[1:-4]})
-        values += ",(NULL,'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')" % (startexchage,startcoin,endexchange,endcoin,startprice,endcount,endprice,profit,routes,'2',createtime)
+        profit = round((endcount-1)*100,2)
+        steps = len(i[2:])
+        # i[1].append(1)
+        # for k in range(2,steps+1):
+            # i[k].append(datapair[i[k-1][1]][i[k][1]][0])
+        routes = json.dumps({"route":i[1:]})
+        values += ",(NULL,'%s','%s','%s','%s','%s','%s','%s','%s','%s','%s')" % (coin,startexchage,endexchange,endcount,profit,exchanges,steps,routes,'2',createtime)
     values = re.sub(r'^,','',values)
     sql = "insert into coindata_routes values %s;" % values
     mysql(sql)
@@ -190,12 +204,13 @@ def main():
     datapair = getHighPair()
     #basecurrency = datapair.keys()
     #import pdb;pdb.set_trace()
-    for i in genWay('OMG'):
-        print i
-    sys.exit(1)
+    # genWay('OMG')
+    # for i in genWay('OMG'):
+        # print i
+    # sys.exit(1)
     
     pool = multiprocessing.Pool(processes=maxprocess)
-    for bc in runbc:
+    for bc in runbc[:5]:
         pool.apply_async(genWay, (bc, ))
     pool.close()
     pool.join()
@@ -205,6 +220,7 @@ def main():
 if __name__ == '__main__':
     float = 16
     maxprocess = 4
+    createtime = int(time.time())
     runbc = ['BTC','ETH','XRP','BCH','EOS','LTC','XLM','ADA','TRX','MIOTA','USDT','NEO','DASH','BNB','VEN','ETC','XEM','OKB','HT','OMG','QTUM','ONT','ZEC','ICX','LSK','DCR','BCN','ZIL','BTG','XET','BTM','SC','ZRX','XVG']
     rate = {"bitfinex":0.02,"hitbtc":0.02,"bittrex":0.01,"okex":0.02,"gateio":0.02,"binance":0.02,"poloniex":0.02,"ethfinex":0.02}
     main()
